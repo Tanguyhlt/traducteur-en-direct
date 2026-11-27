@@ -414,6 +414,20 @@ class Application:
         self.root.destroy()
 
 
+def _assurer_dependances():
+    """Installe les dépendances manquantes (une seule fois) puis relance le script."""
+    import subprocess
+    req = os.path.join(os.path.dirname(os.path.abspath(__file__)), "requirements.txt")
+    print("Installation automatique des dépendances (une seule fois, quelques minutes)...")
+    subprocess.call([sys.executable, "-m", "ensurepip", "--upgrade"])
+    # d'abord l'installation standard (venv), sinon repli en --user
+    rc = subprocess.call([sys.executable, "-m", "pip", "install", "-r", req])
+    if rc != 0:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "-r", req])
+    print("Dépendances installées — relance de l'application...")
+    os.execv(sys.executable, [sys.executable] + sys.argv)  # re-exécute avec les nouveaux packages
+
+
 def main():
     try:
         import numpy  # noqa: F401
@@ -421,10 +435,12 @@ def main():
         import faster_whisper  # noqa: F401
         import argostranslate  # noqa: F401
     except ImportError:
-        print("Dépendances manquantes. Lancez d'abord :  pip install -r requirements.txt")
-        print("Ou double-cliquez simplement sur run.bat (Windows) / run.sh (Linux, Mac).")
-        input("Appuyez sur Entrée pour quitter...")
-        sys.exit(1)
+        try:
+            _assurer_dependances()
+        except Exception as exc:
+            print(f"Installation auto échouée ({exc}). Faites à la main :  pip install -r requirements.txt")
+            input("Appuyez sur Entrée pour quitter...")
+            sys.exit(1)
     root = tk.Tk()
     Application(root)
     root.mainloop()
