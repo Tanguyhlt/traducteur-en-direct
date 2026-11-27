@@ -15,6 +15,7 @@ Paires de langues : japonais, anglais, espagnol, allemand, italien,
 portugais, chinois -> français (voir la liste PAIRS ci-dessous).
 """
 
+import math
 import os
 import queue
 import sys
@@ -118,8 +119,19 @@ class ReconnaissanceVocale:
 
 
 # ---------------------------------------------------------------------------
-# Capture du microphone
+# Capture audio (micro ou son du PC en loopback)
 # ---------------------------------------------------------------------------
+
+def lister_peripheriques(sd, source):
+    """Liste (index, libellé) des périphériques utilisables pour la source."""
+    retour = []
+    for i, d in enumerate(sd.query_devices()):
+        if source == "boucle" and d.get("max_output_channels", 0) > 0:
+            retour.append((i, "🔊 " + str(d["name"])))
+        elif source == "micro" and d.get("max_input_channels", 0) > 0:
+            retour.append((i, "🎙️ " + str(d["name"])))
+    return retour
+
 
 class CaptureMicro:
     def __init__(self):
@@ -128,34 +140,53 @@ class CaptureMicro:
         self.file_chunks = queue.Queue()
         self.stream = None
         self._verrou = threading.Lock()
-        self._tampon = []          # morceaux audio accumulés
+        self._tampon = []          # morceaux audio accumulés (16 kHz mono)
         self._traite = 0           # nombre d'échantillons déjà analysés
+        self._rate = SAMPLE_RATE   # fréquence réelle du périphérique
 
     def _callback(self, indata, frames, time_info, status):
-        # indata est 2D (frames, canaux) -> on aplati en 1D pour Whisper
-        self.file_chunks.put(indata.copy().reshape(-1))
+        # indata est 2D (frames, canaux) -> mono 1D, puis rééchantillonné à 16 kHz
+        import numpy as np
+        x = indata.astype(np.float32)
+        if x.ndim == 2 and x.shape[1] > 1:
+            x = x.mean(axis=1)
+        else:
+            x = x.reshape(-1)
+        if self._rate != SAMPLE_RATE and len(x) > 1:
+            n_out = max(1, int(round(len(x) * SAMPLE_RATE / self._rate)))
+            x = np.interp(np.linspace(0, len(x), n_out, endpoint=False),
+                          np.arange(len(x)), x).astype(np.float32)
+        self.file_chunks.put(x)
 
-    def demarrer(self, source="micro"):
+    def demarrer(self, source="micro", device_index=None):
+        if source == "boucle" and device_index is None:
+            device_index = self.sd.default.device[1]  # sortie par défaut
+        if source == "micro" and device_index is None:
+            device_index = self.sd.default.device[0]  # entrée par défaut
+        dev = self.sd.query_devices(device_index)
+        rate = int(dev.get("default_samplerate") or SAMPLE_RATE)
         if source == "boucle":
-            # Capture de la SORTIE audio (loopback WASAPI sous Windows) :
-            # on ouvre le périphérique de rendu par défaut en entrée.
+            # loopback WASAPI : on ouvre le rendu avec SES canaux (souvent 2 / 48 kHz)
+            channels = max(1, int(dev.get("max_output_channels") or 2))
+        else:
+            channels = 1
+        try:
+            self.stream = self.sd.InputStream(
+                samplerate=rate, channels=channels, dtype="float32",
+                blocksize=1024, device=device_index, callback=self._callback)
+        except Exception:
+            # repli : 2 canaux / 48 kHz (config loopback la plus courante)
+            rate, channels = 48000, 2
             try:
-                idx_sortie = self.sd.default.device[1]  # device de sortie par défaut
-                nom = self.sd.query_devices(idx_sortie)["name"]
                 self.stream = self.sd.InputStream(
-                    samplerate=SAMPLE_RATE, channels=1, dtype="float32",
-                    blocksize=1024, device=idx_sortie, callback=self._callback)
+                    samplerate=rate, channels=channels, dtype="float32",
+                    blocksize=1024, device=device_index, callback=self._callback)
             except Exception as exc:
                 raise RuntimeError(
-                    "Capture du son du PC impossible (" + str(exc) + "). "
-                    "Solutions : (1) Panneau de configuration du son → Enregistrement → "
-                    "activez « Mixage stéréo » et choisissez-le comme source, ou "
-                    "(2) installez un câble audio virtuel (ex: VB-Cable) et "
-                    "sélectionnez sa sortie comme périphérique d'entrée.") from exc
-        else:
-            self.stream = self.sd.InputStream(
-                samplerate=SAMPLE_RATE, channels=1, dtype="float32",
-                blocksize=1024, callback=self._callback)
+                    "Capture impossible sur « " + str(dev.get("name")) + " » (" + str(exc) + "). "
+                    "Solutions : (1) activez « Mixage stéréo » (Panneau de son → Enregistrement), ou "
+                    "(2) installez VB-Cable et choisissez « CABLE Output » dans la liste des périphériques.") from exc
+        self._rate = rate
         self.stream.start()
 
     def arreter(self):
@@ -194,7 +225,7 @@ class Application:
     def __init__(self, root):
         self.root = root
         self.root.title("Traducteur en direct — 100 % local")
-        self.root.geometry("460x340")
+        self.root.geometry("460x400")
         self.root.resizable(False, False)
 
         self.en_marche = False
@@ -218,12 +249,20 @@ class Application:
         self.choix_source.pack(pady=2)
         self.choix_source.bind("<<ComboboxSelected>>", self._changer_source)
 
+        tk.Label(root, text="Périphérique audio :", font=("Segoe UI", 9)).pack(pady=(6, 0))
+        self.choix_device = ttk.Combobox(root, state="readonly", width=38, values=[])
+        self.choix_device.pack(pady=2)
+        self.choix_device.bind("<<ComboboxSelected>>", self._changer_device)
+        self._devices = []
+        self.device_index = None
+
         tk.Label(root, text="Langue parlée :", font=("Segoe UI", 9)).pack(pady=(6, 0))
         self.choix = ttk.Combobox(root, state="readonly", width=38,
                                   values=[lib for _, lib in PAIRS])
         self.choix.current(1)  # anglais par défaut
         self.choix.pack(pady=2)
         self.choix.bind("<<ComboboxSelected>>", self._changer_langue)
+        self._changer_source()  # initialise la source + la liste des périphériques
 
         self.bouton = tk.Button(root, text="▶  Démarrer", width=20,
                                 font=("Segoe UI", 11, "bold"),
@@ -270,6 +309,27 @@ class Application:
         idx = self.choix_source.current()
         if 0 <= idx < len(SOURCES):
             self.source = SOURCES[idx][0]
+        self._remplir_devices()
+
+    def _remplir_devices(self):
+        import sounddevice as sd
+        self._devices = lister_peripheriques(sd, self.source)
+        self.choix_device["values"] = [lib for _, lib in self._devices]
+        defaut = sd.default.device[1] if self.source == "boucle" else sd.default.device[0]
+        choix = None
+        for i, (idx, _lib) in enumerate(self._devices):
+            if idx == defaut:
+                choix = i
+        if choix is None and self._devices:
+            choix = 0
+        if choix is not None:
+            self.choix_device.current(choix)
+            self.device_index = self._devices[choix][0]
+
+    def _changer_device(self, _event=None):
+        idx = self.choix_device.current()
+        if 0 <= idx < len(self._devices):
+            self.device_index = self._devices[idx][0]
 
     def _maj_statut(self, texte):
         self.fil_ui.put(("statut", texte))
@@ -306,7 +366,7 @@ class Application:
                 self._maj_statut("🔊 Capture du son du PC (vidéos)… lancez une vidéo !")
             else:
                 self._maj_statut("🎙️ Micro ouvert — parlez !")
-            self.capture.demarrer(self.source)
+            self.capture.demarrer(self.source, self.device_index)
             while not self._stop.is_set():
                 time.sleep(INTERVALLE)
                 if not self.en_marche or self.capture is None:
@@ -314,6 +374,9 @@ class Application:
                 fenetre, nouveau = self.capture.nouveau_audio()
                 if fenetre is None:
                     continue
+                import numpy as np
+                rms = float(np.sqrt(np.mean(fenetre.astype(np.float64) ** 2)))
+                self.fil_ui.put(("niveau", 20 * math.log10(rms + 1e-9)))
                 texte_src = self.stt.transcrire(fenetre, self.langue)
                 if not texte_src:
                     continue
@@ -328,6 +391,12 @@ class Application:
                 msg = self.fil_ui.get_nowait()
                 if msg[0] == "statut":
                     self.statut.config(text=msg[1])
+                elif msg[0] == "niveau":
+                    db = msg[1]
+                    if db < -55:
+                        self.statut.config(text=f"⚠️ Aucun son détecté ({db:.0f} dB) — la vidéo joue-t-elle ? Bon périphérique choisi ?")
+                    else:
+                        self.statut.config(text=f"🔊 Niveau audio : {db:.0f} dB — écoute en cours…")
                 elif msg[0] == "sous_titre":
                     _, src, fr = msg
                     self.texte_st.config(text=fr)
