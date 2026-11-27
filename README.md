@@ -53,6 +53,13 @@ micro ──▶ faster-whisper (reconnaissance vocale, local)
 | `run.bat` / `run.sh` | Lancement en un double-clic |
 | `build_exe.bat` | Compilation en `.exe` autonome (Windows) |
 
+## ❓ Dépannage
+
+- **`No module named pip`** dans le venv → lancez d'abord `python -m ensurepip --upgrade`, ou les `.bat` le font automatiquement (version corrigée)
+- **`pyinstaller` non reconnu** → utilisez `python -m PyInstaller ...` (les `.bat` corrigés le font)
+- **Erreur de micro** → Paramètres Windows → Confidentialité → Microphone → autorisez les applis
+- **Le .exe est bloqué** → clic droit → Propriétés → « Débloquer »
+
 ## 📝 Licence
 
 Projet personnel — libre d'utilisation et de modification.
