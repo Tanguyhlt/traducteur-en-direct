@@ -19,6 +19,13 @@ Application Windows qui **écoute le micro**, reconnaît la parole, **traduit en
 La paire se change dans la liste déroulante, même pendant l'écoute.
 Pour ajouter d'autres langues : modifiez la liste `PAIRS` dans `traducteur_live.py`.
 
+## 🔊 Source audio (2 modes)
+
+- **🔊 Son du PC** (sélectionné par défaut) : traduit le **son des vidéos / musiques / appels** que vous jouez — capture de la sortie audio en loopback (WASAPI sous Windows). Lancez une vidéo YouTube, cliquez sur ▶ Démarrer, et les sous-titres français apparaissent.
+- **🎙️ Microphone** : traduit ce qui est **dit à voix haute** près du micro.
+
+> Si le mode « Son du PC » ne fonctionne pas : Panneau de son → Enregistrement → activez « Mixage stéréo », ou installez un câble virtuel (VB-Cable).
+
 ## ▶️ Utilisation (Windows — le plus simple)
 
 1. Téléchargez le **ZIP de la release** (bouton *Releases* → dernière version → asset `.zip`) et décompressez-le dans `D:\projet traducteur`.

@@ -40,6 +40,12 @@ PAIRS = [
     ("zh", "🇨🇳 Chinois   →  🇫🇷 Français"),
 ]
 
+# Sources audio possibles
+SOURCES = [
+    ("micro", "🎙️ Microphone (ce qui est dit)"),
+    ("boucle", "🔊 Son du PC (vidéos, musique, appels…)"),
+]
+
 # Taille du modèle Whisper : tiny / base / small / medium (small = bon compromis)
 MODEL_WHISPER = os.environ.get("WHISPER_MODEL", "small")
 
@@ -129,10 +135,27 @@ class CaptureMicro:
         # indata est 2D (frames, canaux) -> on aplati en 1D pour Whisper
         self.file_chunks.put(indata.copy().reshape(-1))
 
-    def demarrer(self):
-        self.stream = self.sd.InputStream(
-            samplerate=SAMPLE_RATE, channels=1, dtype="float32",
-            blocksize=1024, callback=self._callback)
+    def demarrer(self, source="micro"):
+        if source == "boucle":
+            # Capture de la SORTIE audio (loopback WASAPI sous Windows) :
+            # on ouvre le périphérique de rendu par défaut en entrée.
+            try:
+                idx_sortie = self.sd.default.device[1]  # device de sortie par défaut
+                nom = self.sd.query_devices(idx_sortie)["name"]
+                self.stream = self.sd.InputStream(
+                    samplerate=SAMPLE_RATE, channels=1, dtype="float32",
+                    blocksize=1024, device=idx_sortie, callback=self._callback)
+            except Exception as exc:
+                raise RuntimeError(
+                    "Capture du son du PC impossible (" + str(exc) + "). "
+                    "Solutions : (1) Panneau de configuration du son → Enregistrement → "
+                    "activez « Mixage stéréo » et choisissez-le comme source, ou "
+                    "(2) installez un câble audio virtuel (ex: VB-Cable) et "
+                    "sélectionnez sa sortie comme périphérique d'entrée.") from exc
+        else:
+            self.stream = self.sd.InputStream(
+                samplerate=SAMPLE_RATE, channels=1, dtype="float32",
+                blocksize=1024, callback=self._callback)
         self.stream.start()
 
     def arreter(self):
@@ -171,7 +194,7 @@ class Application:
     def __init__(self, root):
         self.root = root
         self.root.title("Traducteur en direct — 100 % local")
-        self.root.geometry("460x300")
+        self.root.geometry("460x340")
         self.root.resizable(False, False)
 
         self.en_marche = False
@@ -180,6 +203,7 @@ class Application:
         self.capture = None
         self.stt = None
         self.langue = PAIRS[0][0]
+        self.source = SOURCES[0][0]
 
         # --- panneau de contrôle ---
         tk.Label(root, text="🎙️ Traducteur en direct",
@@ -187,10 +211,18 @@ class Application:
         tk.Label(root, text="Sous-titres traduits en français, hors ligne",
                  font=("Segoe UI", 9)).pack()
 
+        tk.Label(root, text="Source audio :", font=("Segoe UI", 9)).pack(pady=(6, 0))
+        self.choix_source = ttk.Combobox(root, state="readonly", width=38,
+                                         values=[lib for _, lib in SOURCES])
+        self.choix_source.current(1)  # son du PC par défaut (vidéos)
+        self.choix_source.pack(pady=2)
+        self.choix_source.bind("<<ComboboxSelected>>", self._changer_source)
+
+        tk.Label(root, text="Langue parlée :", font=("Segoe UI", 9)).pack(pady=(6, 0))
         self.choix = ttk.Combobox(root, state="readonly", width=38,
                                   values=[lib for _, lib in PAIRS])
         self.choix.current(1)  # anglais par défaut
-        self.choix.pack(pady=8)
+        self.choix.pack(pady=2)
         self.choix.bind("<<ComboboxSelected>>", self._changer_langue)
 
         self.bouton = tk.Button(root, text="▶  Démarrer", width=20,
@@ -234,6 +266,11 @@ class Application:
         if 0 <= idx < len(PAIRS):
             self.langue = PAIRS[idx][0]
 
+    def _changer_source(self, _event=None):
+        idx = self.choix_source.current()
+        if 0 <= idx < len(SOURCES):
+            self.source = SOURCES[idx][0]
+
     def _maj_statut(self, texte):
         self.fil_ui.put(("statut", texte))
 
@@ -265,8 +302,11 @@ class Application:
             assurer_packages_argos(self._maj_statut)
             self.stt = ReconnaissanceVocale(self._maj_statut)
             self.capture = CaptureMicro()
-            self._maj_statut("🎙️ Micro ouvert — parlez !")
-            self.capture.demarrer()
+            if self.source == "boucle":
+                self._maj_statut("🔊 Capture du son du PC (vidéos)… lancez une vidéo !")
+            else:
+                self._maj_statut("🎙️ Micro ouvert — parlez !")
+            self.capture.demarrer(self.source)
             while not self._stop.is_set():
                 time.sleep(INTERVALLE)
                 if not self.en_marche or self.capture is None:
