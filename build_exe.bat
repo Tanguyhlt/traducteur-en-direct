@@ -14,7 +14,6 @@ if errorlevel 1 (
     exit /b 1
 )
 
-rem --- Choix de l'interpreteur : venv si pip y fonctionne, sinon python direct ---
 set "PY=python"
 if not exist ".venv\Scripts\python.exe" python -m venv .venv
 if exist ".venv\Scripts\python.exe" (
@@ -24,18 +23,23 @@ if exist ".venv\Scripts\python.exe" (
     if not errorlevel 1 set "PY=.venv\Scripts\python.exe"
 )
 
-echo Installation des dependances + pyinstaller...
-%PY% -m pip install --upgrade pip
-%PY% -m pip install -r requirements.txt pyinstaller
+rem --- Installe UNIQUEMENT si manquant (1ere fois seulement) ---
+%PY% -c "import faster_whisper, argostranslate, sounddevice, numpy, PyInstaller" >nul 2>nul
 if errorlevel 1 (
-    echo [ATTENTION] pip inutilisable avec %PY% - reessai en mode utilisateur...
-    python -m pip install --user -r requirements.txt pyinstaller
+    echo Installation des dependances + pyinstaller (une seule fois)...
+    %PY% -m pip install -r requirements.txt pyinstaller
     if errorlevel 1 (
-        echo [ERREUR] pip introuvable. Lancez d'abord : python -m ensurepip --upgrade
-        pause
-        exit /b 1
+        echo [ATTENTION] echec avec %PY% - reessai en mode utilisateur...
+        python -m pip install --user -r requirements.txt pyinstaller
+        if errorlevel 1 (
+            echo [ERREUR] pip indisponible. Lancez d'abord : python -m ensurepip --upgrade
+            pause
+            exit /b 1
+        )
+        set "PY=python"
     )
-    set "PY=python"
+) else (
+    echo Dependances deja presentes - compilation directe.
 )
 
 echo Compilation de l'exe (peut prendre plusieurs minutes)...

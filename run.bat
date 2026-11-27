@@ -27,18 +27,23 @@ if exist ".venv\Scripts\python.exe" (
     if not errorlevel 1 set "PY=.venv\Scripts\python.exe"
 )
 
-echo Installation des dependances (une seule fois)...
-%PY% -m pip install --upgrade pip
-%PY% -m pip install -r requirements.txt
+rem --- Installe les dependances UNIQUEMENT si elles manquent (1ere fois seulement) ---
+%PY% -c "import faster_whisper, argostranslate, sounddevice, numpy" >nul 2>nul
 if errorlevel 1 (
-    echo [ATTENTION] pip inutilisable avec %PY% - reessai en mode utilisateur...
-    python -m pip install --user -r requirements.txt
+    echo Installation des dependances (une seule fois)...
+    %PY% -m pip install -r requirements.txt
     if errorlevel 1 (
-        echo [ERREUR] pip introuvable. Lancez d'abord : python -m ensurepip --upgrade
-        pause
-        exit /b 1
+        echo [ATTENTION] echec avec %PY% - reessai en mode utilisateur...
+        python -m pip install --user -r requirements.txt
+        if errorlevel 1 (
+            echo [ERREUR] pip indisponible. Lancez d'abord : python -m ensurepip --upgrade
+            pause
+            exit /b 1
+        )
+        set "PY=python"
     )
-    set "PY=python"
+) else (
+    echo Dependances deja presentes - lancement direct.
 )
 
 echo Lancement...
