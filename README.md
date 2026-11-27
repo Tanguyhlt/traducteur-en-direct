@@ -63,6 +63,10 @@ micro ──▶ faster-whisper (reconnaissance vocale, local)
 
 ## ❓ Dépannage
 
+- **La fenêtre cmd se ferme tout de suite** → ouvrez un cmd dans le dossier (clic droit dans le dossier → « Ouvrir dans Terminal »), tapez `run.bat`, puis lisez le fichier **`_lancement.log`** créé à côté (ou envoyez-le-moi). Essayez aussi **`lancer_app.bat`** (lance l'app sans réinstaller).
+- **Pas de .exe après build_exe.bat** → lancez `build_exe.bat` depuis un vrai cmd (pas en double-cliquant), vérifiez `dist\traducteur_live.exe`, sinon lisez **`_build.log`**.
+
+
 - **`No module named pip`** dans le venv → lancez d'abord `python -m ensurepip --upgrade`, ou les `.bat` le font automatiquement (version corrigée)
 - **`pyinstaller` non reconnu** → utilisez `python -m PyInstaller ...` (les `.bat` corrigés le font)
 - **Erreur de micro** → Paramètres Windows → Confidentialité → Microphone → autorisez les applis
