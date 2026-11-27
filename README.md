@@ -31,7 +31,7 @@ Pour ajouter d'autres langues : modifiez la liste `PAIRS` dans `traducteur_live.
 
 1. Téléchargez le **ZIP de la release** (bouton *Releases* → dernière version → asset `.zip`) et décompressez-le dans `D:\projet traducteur`.
 2. **Prérequis** : Python 3.10+ installé depuis [python.org](https://www.python.org/downloads/) (case « Add Python to PATH » cochée).
-3. Double-cliquez sur **`run.bat`** : l'environnement s'installe automatiquement, puis l'application se lance.
+3. Double-cliquez sur **`TOUT_EN_UN.bat`** : les dépendances s'installent automatiquement (une seule fois), puis l'application se lance. En cas de souci, lisez **`_tout.log`**.
 4. Choisissez la langue parlée, cliquez sur **▶ Démarrer**, parlez : les sous-titres traduits s'affichent en bas de l'écran.
 
 > Linux / macOS : `chmod +x run.sh && ./run.sh`
