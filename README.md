@@ -25,6 +25,7 @@ Pour ajouter d'autres langues : modifiez la liste `PAIRS` dans `traducteur_live.
 - **🎙️ Microphone** : traduit ce qui est **dit à voix haute** près du micro.
 
 > Si le mode « Son du PC » ne fonctionne pas : Panneau de son → Enregistrement → activez « Mixage stéréo », ou installez un câble virtuel (VB-Cable).
+> Astuce : choisissez le bon **périphérique** dans la liste déroulante, et surveillez le **niveau audio (dB)** en bas de la fenêtre : s'il affiche « Aucun son détecté », c'est que la source/périphérique ne capte rien (vidéo sur casque Bluetooth = choisir ce casque dans la liste).
 
 ## ▶️ Utilisation (Windows — le plus simple)
 
