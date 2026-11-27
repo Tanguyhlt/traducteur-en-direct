@@ -1,0 +1,11 @@
+# Reconnaissance vocale hors ligne (Whisper)
+faster-whisper>=1.1.0
+
+# Traduction hors ligne (Argos Translate)
+argostranslate>=1.9.0
+
+# Capture du microphone
+sounddevice>=0.4.6
+numpy>=1.26.0
+
+# Interface graphique : tkinter est inclus avec Python (rien à installer)
