@@ -105,6 +105,8 @@ class ReconnaissanceVocale:
         maj_statut("Modèle vocal prêt ✔")
 
     def transcrire(self, audio, langue):
+        import numpy as np
+        audio = np.asarray(audio, dtype=np.float32).reshape(-1)  # Whisper exige un 1D
         segments, _ = self.modele.transcribe(audio, language=langue, vad_filter=True)
         return " ".join(s.text.strip() for s in segments).strip()
 
@@ -124,7 +126,8 @@ class CaptureMicro:
         self._traite = 0           # nombre d'échantillons déjà analysés
 
     def _callback(self, indata, frames, time_info, status):
-        self.file_chunks.put(indata.copy())
+        # indata est 2D (frames, canaux) -> on aplati en 1D pour Whisper
+        self.file_chunks.put(indata.copy().reshape(-1))
 
     def demarrer(self):
         self.stream = self.sd.InputStream(
@@ -146,7 +149,7 @@ class CaptureMicro:
                 self._tampon.append(self.file_chunks.get())
             if not self._tampon:
                 return None, 0.0
-            audio = np.concatenate(self._tampon)
+            audio = np.concatenate(self._tampon).reshape(-1)  # toujours 1D pour Whisper
             # on garde seulement la fenêtre utile
             max_ech = int(SAMPLE_RATE * TAILLE_FENETRE)
             if len(audio) > max_ech:
